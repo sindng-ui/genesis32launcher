@@ -21,12 +21,14 @@ mkdir -p bin
 # Collect all C# source files and convert to Windows-style paths
 SOURCES=(
     "src\\Win32\\Win32Api.cs"
+    "src\\Core\\LauncherConfig.cs"
     "src\\Core\\DDrawConfig.cs"
     "src\\Core\\AudioRegistryHelper.cs"
     "src\\Core\\GameEmbedder.cs"
     "src\\UI\\LauncherTheme.cs"
     "src\\UI\\ModernButton.cs"
     "src\\UI\\ModernSlider.cs"
+    "src\\UI\\ScaleSectionView.cs"
     "src\\UI\\LauncherForm.cs"
     "src\\Program.cs"
 )
@@ -45,5 +47,7 @@ OUT_EXE="bin\\G3P2Launcher.exe"
     /out:"$OUT_EXE" \
     "${SOURCES[@]}"
 
-echo "=== Build successful! Output: bin/G3P2Launcher.exe ==="
-ls -lh bin/G3P2Launcher.exe
+cp -f bin/G3P2Launcher.exe ./G3P2Launcher.exe
+
+echo "=== Build successful! Output: bin/G3P2Launcher.exe and ./G3P2Launcher.exe ==="
+ls -lh bin/G3P2Launcher.exe G3P2Launcher.exe

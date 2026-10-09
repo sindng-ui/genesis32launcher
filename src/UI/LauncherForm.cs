@@ -11,6 +11,9 @@ namespace G3P2Launcher.UI
     {
         private const int HOTKEY_ID_MOUSE = 0x5411;
         private const int VK_F11 = 0x7A;
+        private const int SIDEBAR_WIDTH = 310;
+        private const int CONTENT_WIDTH = 270;
+        private const int PADDING_X = 20;
 
         private readonly string _gameDir;
         private readonly string _gameExe;
@@ -18,19 +21,21 @@ namespace G3P2Launcher.UI
 
         private readonly GameEmbedder _embedder;
         private readonly DDrawConfig _ddrawConfig;
+        private readonly LauncherConfig _launcherConfig;
 
         // UI Controls
         private Panel _viewportPanel;
         private Panel _sidebarPanel;
+        private Label _lblTitle;
         private ModernButton _btnLaunch;
-        private ModernButton _btnScale10;
-        private ModernButton _btnScale125;
-        private ModernButton _btnScale150;
+        private ScaleSectionView _scaleSectionView;
+        private Label _lblMouseSec;
         private ModernButton _btnMouseClip;
-        private ModernSlider _sliderBgm;
-        private ModernSlider _sliderSfx;
+        private Label _lblAudioSec;
         private Label _lblBgm;
+        private ModernSlider _sliderBgm;
         private Label _lblSfx;
+        private ModernSlider _sliderSfx;
         private Label _lblStatus;
 
         // State
@@ -43,6 +48,9 @@ namespace G3P2Launcher.UI
             _gameDir = gameDir;
             _gameExe = Path.Combine(gameDir, "G3PartII.exe");
             _assetsDir = assetsDir;
+
+            _launcherConfig = LauncherConfig.Load();
+            _currentScale = _launcherConfig.CurrentScale;
 
             _embedder = new GameEmbedder();
             _ddrawConfig = new DDrawConfig(_gameDir, _assetsDir);
@@ -68,13 +76,13 @@ namespace G3P2Launcher.UI
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
 
-            // 1. Sidebar Panel (Right)
+            // 1. Sidebar Panel (Right - expanded to 310px)
             _sidebarPanel = new Panel
             {
-                Width = 250,
+                Width = SIDEBAR_WIDTH,
                 Dock = DockStyle.Right,
                 BackColor = LauncherTheme.SidebarDark,
-                Padding = new Padding(16)
+                AutoScroll = true
             };
 
             BuildSidebarControls();
@@ -97,33 +105,30 @@ namespace G3P2Launcher.UI
             Controls.Add(_viewportPanel);
             Controls.Add(_sidebarPanel);
 
-            // Apply default scale 1.0x (800x600 viewport + sidebar)
-            SetScale(1.0);
+            // Apply loaded user scale
+            SetScale(_currentScale);
         }
 
         private void BuildSidebarControls()
         {
-            int curY = 16;
-
-            // Header Title
-            var lblTitle = new Label
+            // Title
+            _lblTitle = new Label
             {
                 Text = "THE WAR OF GENESIS III\nPART 2 LAUNCHER",
                 Font = LauncherTheme.HeaderFont,
                 ForeColor = LauncherTheme.AccentGold,
-                Location = new Point(16, curY),
-                Size = new Size(218, 44),
+                Location = new Point(PADDING_X, 16),
+                Size = new Size(CONTENT_WIDTH, 44),
                 TextAlign = ContentAlignment.TopCenter
             };
-            _sidebarPanel.Controls.Add(lblTitle);
-            curY += 56;
+            _sidebarPanel.Controls.Add(_lblTitle);
 
-            // Launch / Stop Button
+            // Launch Button
             _btnLaunch = new ModernButton
             {
                 Text = "▶  START GAME",
-                Location = new Point(16, curY),
-                Size = new Size(218, 46),
+                Location = new Point(PADDING_X, 70),
+                Size = new Size(CONTENT_WIDTH, 48),
                 BaseColor = Color.FromArgb(30, 80, 50),
                 HoverColor = Color.FromArgb(40, 110, 68),
                 AccentColor = LauncherTheme.AccentGreen,
@@ -131,84 +136,61 @@ namespace G3P2Launcher.UI
             };
             _btnLaunch.Click += OnLaunchButtonClicked;
             _sidebarPanel.Controls.Add(_btnLaunch);
-            curY += 58;
 
-            // Scale Section Header
-            var lblScaleSec = new Label
+            // Dynamic Scale Section View
+            _scaleSectionView = new ScaleSectionView(_launcherConfig, CONTENT_WIDTH)
             {
-                Text = "DISPLAY SCALE",
-                Font = LauncherTheme.SubheaderFont,
-                ForeColor = LauncherTheme.TextSecondary,
-                Location = new Point(16, curY),
-                Size = new Size(218, 20)
+                Location = new Point(PADDING_X, 130)
             };
-            _sidebarPanel.Controls.Add(lblScaleSec);
-            curY += 24;
+            _scaleSectionView.ScaleSelected += (s, scale) => SetScale(scale);
+            _scaleSectionView.LayoutChanged += (s, e) => UpdateSidebarVerticalLayout();
+            _sidebarPanel.Controls.Add(_scaleSectionView);
 
-            // Scale Buttons
-            int btnW = 68;
-            _btnScale10 = CreateScaleButton("1.0x", 1.0, 16, curY, btnW);
-            _btnScale125 = CreateScaleButton("1.25x", 1.25, 91, curY, btnW);
-            _btnScale150 = CreateScaleButton("1.5x", 1.5, 166, curY, btnW);
-
-            _sidebarPanel.Controls.Add(_btnScale10);
-            _sidebarPanel.Controls.Add(_btnScale125);
-            _sidebarPanel.Controls.Add(_btnScale150);
-            curY += 46;
-
-            // Mouse Lock Toggle Button
-            var lblMouseSec = new Label
+            // Mouse Behavior Header
+            _lblMouseSec = new Label
             {
                 Text = "MOUSE BEHAVIOR",
                 Font = LauncherTheme.SubheaderFont,
                 ForeColor = LauncherTheme.TextSecondary,
-                Location = new Point(16, curY),
-                Size = new Size(218, 20)
+                Size = new Size(CONTENT_WIDTH, 18)
             };
-            _sidebarPanel.Controls.Add(lblMouseSec);
-            curY += 24;
+            _sidebarPanel.Controls.Add(_lblMouseSec);
 
+            // Mouse Lock Button
             _btnMouseClip = new ModernButton
             {
                 Text = "🖱️ Mouse Free [F11]",
-                Location = new Point(16, curY),
-                Size = new Size(218, 36),
+                Size = new Size(CONTENT_WIDTH, 36),
                 BaseColor = Color.FromArgb(28, 45, 65),
                 AccentColor = LauncherTheme.AccentCyan,
                 ShowAccentBorder = true
             };
             _btnMouseClip.Click += (s, e) => ToggleMouseLock();
             _sidebarPanel.Controls.Add(_btnMouseClip);
-            curY += 48;
 
-            // Audio Section Header
-            var lblAudioSec = new Label
+            // Audio Header
+            _lblAudioSec = new Label
             {
                 Text = "SOUND VOLUME",
                 Font = LauncherTheme.SubheaderFont,
                 ForeColor = LauncherTheme.TextSecondary,
-                Location = new Point(16, curY),
-                Size = new Size(218, 20)
+                Size = new Size(CONTENT_WIDTH, 18)
             };
-            _sidebarPanel.Controls.Add(lblAudioSec);
-            curY += 24;
+            _sidebarPanel.Controls.Add(_lblAudioSec);
 
-            // BGM Volume Slider
+            // BGM Label & Slider
             _lblBgm = new Label
             {
                 Text = "BGM Volume: 90%",
                 Font = LauncherTheme.SmallFont,
                 ForeColor = LauncherTheme.TextPrimary,
-                Location = new Point(16, curY),
-                Size = new Size(218, 16)
+                Size = new Size(CONTENT_WIDTH, 16)
             };
             _sidebarPanel.Controls.Add(_lblBgm);
-            curY += 18;
 
             _sliderBgm = new ModernSlider
             {
-                Location = new Point(16, curY),
-                Size = new Size(218, 22),
+                Size = new Size(CONTENT_WIDTH, 22),
                 Value = AudioRegistryHelper.GetBgmVolume(),
                 FillColor = LauncherTheme.AccentGold
             };
@@ -218,24 +200,20 @@ namespace G3P2Launcher.UI
                 AudioRegistryHelper.SetBgmVolume(_sliderBgm.Value);
             };
             _sidebarPanel.Controls.Add(_sliderBgm);
-            curY += 34;
 
-            // SFX Volume Slider
+            // SFX Label & Slider
             _lblSfx = new Label
             {
                 Text = "SFX Volume: 100%",
                 Font = LauncherTheme.SmallFont,
                 ForeColor = LauncherTheme.TextPrimary,
-                Location = new Point(16, curY),
-                Size = new Size(218, 16)
+                Size = new Size(CONTENT_WIDTH, 16)
             };
             _sidebarPanel.Controls.Add(_lblSfx);
-            curY += 18;
 
             _sliderSfx = new ModernSlider
             {
-                Location = new Point(16, curY),
-                Size = new Size(218, 22),
+                Size = new Size(CONTENT_WIDTH, 22),
                 Value = AudioRegistryHelper.GetSfxVolume(),
                 FillColor = LauncherTheme.AccentCyan
             };
@@ -245,7 +223,6 @@ namespace G3P2Launcher.UI
                 AudioRegistryHelper.SetSfxVolume(_sliderSfx.Value);
             };
             _sidebarPanel.Controls.Add(_sliderSfx);
-            curY += 42;
 
             // Status Bar at bottom
             _lblStatus = new Label
@@ -254,23 +231,40 @@ namespace G3P2Launcher.UI
                 Font = LauncherTheme.SmallFont,
                 ForeColor = LauncherTheme.TextMuted,
                 Dock = DockStyle.Bottom,
-                Height = 40,
+                Height = 36,
                 TextAlign = ContentAlignment.MiddleCenter
             };
             _sidebarPanel.Controls.Add(_lblStatus);
+
+            UpdateSidebarVerticalLayout();
         }
 
-        private ModernButton CreateScaleButton(string label, double scale, int x, int y, int width)
+        private void UpdateSidebarVerticalLayout()
         {
-            var btn = new ModernButton
-            {
-                Text = label,
-                Location = new Point(x, y),
-                Size = new Size(width, 34),
-                BaseColor = Color.FromArgb(30, 38, 52)
-            };
-            btn.Click += (s, e) => SetScale(scale);
-            return btn;
+            if (_scaleSectionView == null) return;
+
+            int curY = _scaleSectionView.Bottom + 16;
+
+            _lblMouseSec.Location = new Point(PADDING_X, curY);
+            curY += 22;
+
+            _btnMouseClip.Location = new Point(PADDING_X, curY);
+            curY += 46;
+
+            _lblAudioSec.Location = new Point(PADDING_X, curY);
+            curY += 22;
+
+            _lblBgm.Location = new Point(PADDING_X, curY);
+            curY += 18;
+
+            _sliderBgm.Location = new Point(PADDING_X, curY);
+            curY += 32;
+
+            _lblSfx.Location = new Point(PADDING_X, curY);
+            curY += 18;
+
+            _sliderSfx.Location = new Point(PADDING_X, curY);
+            curY += 36;
         }
 
         private void SetScale(double scale)
@@ -280,14 +274,6 @@ namespace G3P2Launcher.UI
             int vpHeight = (int)(600 * scale);
 
             ClientSize = new Size(vpWidth + _sidebarPanel.Width, vpHeight);
-
-            // Highlight active scale button
-            _btnScale10.ShowAccentBorder = (scale == 1.0);
-            _btnScale125.ShowAccentBorder = (scale == 1.25);
-            _btnScale150.ShowAccentBorder = (scale == 1.5);
-            _btnScale10.Invalidate();
-            _btnScale125.Invalidate();
-            _btnScale150.Invalidate();
 
             // Sync ddraw.ini target dimensions
             _ddrawConfig.WriteOptimizedIni(Path.Combine(_gameDir, "ddraw.ini"), vpWidth, vpHeight);

@@ -40,9 +40,6 @@ bincheck_sizes.exe
 *.userprefs
 *.docstates
 
-# OS Specific
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-.DS_Store
+# Local User Settings
+launcher_settings.ini
+
