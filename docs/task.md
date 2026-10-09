@@ -1,20 +1,44 @@
-# 작업 계획: 창세기전 3 파트 2 창모드 런처 구현
+# Task Checklist: 세이브 에디터 통합 및 런처 연동
 
-- [x] 1. DirectDraw 창모드 래퍼(`cnc-ddraw`) 준비 및 환경 구성 <!-- id: 1 -->
-  - `cnc-ddraw` 다운로드/설치 스크립트 작성 및 게임 폴더(`z:\my\창세기전\창세기전3 파트2`) 내 `ddraw.dll` / `ddraw.ini` 최적화 구성 완료
-- [x] 2. Core 모듈 개발 (C# WinForms / Win32) <!-- id: 2 -->
-  - `src/Win32/Win32Api.cs`: SetParent, SetWindowPos, FindWindow, RegisterHotKey 등 Win32 P/Invoke 정의 완료
-  - `src/Core/GameEmbedder.cs`: 게임 프로세스 실행, HWND 탐색, 자식 창 스타일 적용 및 런처 패널 도킹 엔진 완료
-  - `src/Core/DDrawConfig.cs`: ddraw.ini 읽기/쓰기 및 창모드/렌더러/마우스 클립 설정 관리 완료
-  - `src/Core/AudioRegistryHelper.cs`: 사운드 및 BGM 볼륨 레지스트리 제어 완료
-- [x] 3. 런처 UI 및 기능 연동 <!-- id: 3 -->
-  - `src/UI/LauncherTheme.cs`: 창세기전 3 파트 2 다크 사이버 테마 스타일 정의 완료
-  - `src/UI/ModernButton.cs` / `ModernSlider.cs`: 블러 없는 가벼운 GDI+ 커스텀 UI 완료
-  - `src/UI/LauncherForm.cs`: 뷰포트 영역(Panel) + 사이드바 컨트롤(실행/중지, 배율 1x/1.25x/1.5x, 볼륨 슬라이더, 마우스 클립 토글 F11) 완료
-  - `src/Program.cs`: 엔트리포인트 및 고해상도 DPI 인식 설정 완료
-- [x] 4. 빌드 파이프라인 구성 (`build.sh`) <!-- id: 4 -->
-  - WSL bash에서 Windows .NET csc.exe를 호출하여 `G3P2Launcher.exe` 32비트 GUI 단일 실행 파일 빌드 완료 (32 KB)
-- [x] 5. 실제 구동 및 검증 테스트 <!-- id: 5 -->
-  - 런처 바이너리 컴파일 및 구조 검증, 테스트 결과 보고서(`docs/test_results.txt`) 기록 완료
-- [x] 6. APP_MAP.md 최신화 및 완료 보고 <!-- id: 6 -->
-  - 컴포넌트 인터페이스 명세 및 파일 매핑 최신화 완료
+- [x] 1. `editor222/` 핵심 웹 에디터 리소스 복사 (`launcher/editor/`)
+  - [x] `index.html`, `src/`, `Data/`, `sample_saves/` 복사
+  - [x] 불필요한 분석용 파이썬 스크립트 제외
+- [x] 2. 내장 경량 로컬 HTTP 서버 구현 (`src/Core/EditorHttpServer.cs`)
+  - [x] `HttpListener` 기반 정적 파일 서빙 (`editor/` 디렉토리)
+  - [x] `GET /api/saves`: 세이브 파일 목록 JSON 응답
+  - [x] `GET /api/save?file=...`: 특정 세이브 파일 바이너리 스트림 전송
+  - [x] `POST /api/save?file=...`: 수정된 세이브 바이너리 수신 및 `.bak` 자동 백업 후 저장
+  - [x] `POST /api/backup-all`: 전체 세이브 스냅샷 일괄 백업
+- [x] 3. 웹 에디터 자동 로드 및 게임 폴더 직저장 연동
+  - [x] URL 파라미터 `?file=...` 감지 시 `/api/save` 자동 fetch 및 파싱
+  - [x] [📥 세이브 저장] 버튼 클릭 시 `/api/save` POST 호출 및 성공 토스트 피드백
+- [x] 4. 세이브 섹션 UI 구현 (`src/UI/SaveSectionView.cs`)
+  - [x] 다크 테마 세이브 슬롯 리스트 (슬롯 번호, 파일 크기, 수정일시)
+  - [x] [✏️ Open in Editor], [🔄 Refresh], [📦 Backup All], [📂 Open Folder] 버튼
+- [x] 5. 런처 사이드바 탭 전환 UI 구현 (`src/UI/LauncherForm.cs`)
+  - [x] 상단 `[ 🎮 GAME ]` / `[ 💾 SAVE ]` 세그먼트 탭 버튼
+  - [x] 탭 선택에 따른 하위 뷰(게임 컨트롤 vs 세이브 리스트) 동적 전환
+  - [x] 런처 실행 시 HTTP 서버 기동, 종료 시 정지
+- [x] 6. 빌드 및 테스트 검증
+  - [x] `build.sh`로 C# 5 컴파일 및 정상 빌드 확인
+  - [x] 실제 세이브 파일 선택 -> 브라우저 자동 오픈 및 직저장 기능 검증
+- [x] 7. 사용자 피드백 대응 (AlwaysOnTop 영구 저장 및 에디터 404 버그 수정)
+  - [x] `launcher_settings.ini`에 `AlwaysOnTop` 토글 상태 저장 및 복원 연동 (`src/Core/LauncherConfig.cs`, `src/UI/LauncherForm.cs`)
+  - [x] `EditorHttpServer` 쿼리스트링 루트 라우팅 보정 (`/?file=...` -> `/index.html`) 및 다중 웹 루트 탐색 fallback 구현 (`src/Core/EditorHttpServer.cs`)
+  - [x] `SaveSectionView` 호출 URL을 `/index.html?file=...`로 명시적 지정
+  - [x] `build.sh`에 `editor/` 동기화 추가 및 빌드 검증 완료
+- [x] 8. 런처 밖 마우스 탈출 시 게임 내 입력 차단 (세로 따라움직임 방지)
+  - [x] 원인 정밀 규명: 전체화면 레거시 게임의 `GetCursorPos` 폴링 및 클램핑 구조 파악
+  - [x] `EnableWindow(gameHwnd, false)` 기반 마우스 이동/클릭 차단 적용
+- [x] 9. 마우스 완전 동결(3중 메모리 패치) 및 런처 종료 시 게임 프로세스 강제 사살(Job Object + taskkill 3중 보장)
+  - [x] `G3PartII.dll` 디스어셈블리 분석: `0x10006680`, `0x100338c0`, `0x10033aa0` 3개 마우스 갱신 루틴 발굴
+  - [x] 마우스 뷰포트 탈출 시 `0xC3` (`ret`) 패치로 게임 내 마우스 이동 100% 완전 동결, 진입 시 `0x83` 복원 구현
+  - [x] WinForms `PointToClient` 기반 초정밀 뷰포트 내부 판정 (DPI/멀티모니터 오차 0)
+  - [x] Windows Job Object (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`) 연동
+  - [x] `LauncherForm.cs` 종료 이벤트(`OnFormClosing`)에서 무조건 `TerminateGame()` 호출
+  - [x] `TerminateGame()` 내 `_gameProcess.Kill()`, `Process.GetProcessesByName("G3PartII")`, 및 Windows 커널 `taskkill /F /IM G3PartII.exe /T` 3중 사살 구현
+  - [x] 실제 게임 프로세스 대상 메모리 패치 및 프로세스 정리 실증 테스트 (`test_patch_and_kill`) 통과
+- [x] 10. 문서화 및 빌드
+  - [x] `APP_MAP.md` 업데이트
+  - [x] 모든 파일 700줄 미만 검증 완료
+  - [x] `./build.sh` C# 5 빌드 성공 검증 완료 (59KB)

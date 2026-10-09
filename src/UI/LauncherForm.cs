@@ -24,22 +24,35 @@ namespace G3P2Launcher.UI
         private readonly GameEmbedder _embedder;
         private readonly DDrawConfig _ddrawConfig;
         private readonly LauncherConfig _launcherConfig;
+        private readonly EditorHttpServer _editorServer;
 
         // UI Controls
         private Panel _viewportPanel;
         private Panel _sidebarPanel;
         private Label _lblTitle;
+        private ModernButton _btnTabGame;
+        private ModernButton _btnTabSave;
+        private Panel _panelGameTab;
+        private Panel _panelSaveTab;
+
+        // Game Tab Controls
         private ModernButton _btnLaunch;
         private ScaleSectionView _scaleSectionView;
         private Label _lblWindowSec;
         private ModernButton _btnTopMost;
         private ModernButton _btnMouseClip;
+
+        // Save Tab Controls
+        private SaveSectionView _saveSectionView;
+
         private Label _lblStatus;
 
         // State
         private double _currentScale = 1.0;
         private bool _isMouseFree = true;
         private bool _isGameRunning = false;
+        private System.Windows.Forms.Timer _mouseWatchTimer;
+        private bool _isGameInputEnabled = true;
 
         public LauncherForm(string gameDir, string assetsDir)
         {
@@ -53,6 +66,20 @@ namespace G3P2Launcher.UI
             _embedder = new GameEmbedder();
             _ddrawConfig = new DDrawConfig(_gameDir, _assetsDir);
 
+            // Initialize embedded HTTP server for editor
+            string webRoot = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "editor");
+            if (!Directory.Exists(webRoot))
+            {
+                string parent = Path.GetDirectoryName(AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (!string.IsNullOrEmpty(parent))
+                {
+                    string candidate = Path.Combine(parent, "editor");
+                    if (Directory.Exists(candidate)) webRoot = candidate;
+                }
+            }
+            _editorServer = new EditorHttpServer(webRoot, _gameDir);
+            _editorServer.Start();
+
             _embedder.StatusChanged += OnEmbedderStatusChanged;
             _embedder.GameEmbedded += OnGameEmbedded;
             _embedder.GameExited += OnGameExited;
@@ -62,6 +89,8 @@ namespace G3P2Launcher.UI
             // Register F11 & F12 hotkeys
             Win32Api.RegisterHotKey(this.Handle, HOTKEY_ID_MOUSE, Win32Api.MOD_NONE, VK_F11);
             Win32Api.RegisterHotKey(this.Handle, HOTKEY_ID_TOPMOST, Win32Api.MOD_NONE, VK_F12);
+
+            InitMouseWatcher();
         }
 
         private void InitializeComponent()
@@ -103,29 +132,66 @@ namespace G3P2Launcher.UI
             Controls.Add(_viewportPanel);
             Controls.Add(_sidebarPanel);
 
-            // Apply loaded user scale
+            // Apply loaded user scale and always on top
             SetScale(_currentScale);
+            SetTopMost(_launcherConfig.AlwaysOnTop);
         }
 
         private void BuildSidebarControls()
         {
-            // Title
+            // 1. Title
             _lblTitle = new Label
             {
                 Text = "THE WAR OF GENESIS III\nPART 2 LAUNCHER",
                 Font = LauncherTheme.HeaderFont,
                 ForeColor = LauncherTheme.AccentGold,
-                Location = new Point(PADDING_X, 16),
-                Size = new Size(CONTENT_WIDTH, 44),
+                Location = new Point(PADDING_X, 14),
+                Size = new Size(CONTENT_WIDTH, 42),
                 TextAlign = ContentAlignment.TopCenter
             };
             _sidebarPanel.Controls.Add(_lblTitle);
 
-            // Launch Button
+            // 2. Tab Navigation Buttons
+            int tabW = (CONTENT_WIDTH - 6) / 2;
+            _btnTabGame = new ModernButton
+            {
+                Text = "🎮 GAME",
+                Location = new Point(PADDING_X, 62),
+                Size = new Size(tabW, 32),
+                Font = LauncherTheme.SubheaderFont,
+                BaseColor = Color.FromArgb(32, 50, 75),
+                AccentColor = LauncherTheme.AccentCyan,
+                ShowAccentBorder = true
+            };
+            _btnTabGame.Click += (s, e) => SwitchTab(true);
+            _sidebarPanel.Controls.Add(_btnTabGame);
+
+            _btnTabSave = new ModernButton
+            {
+                Text = "💾 SAVE",
+                Location = new Point(PADDING_X + tabW + 6, 62),
+                Size = new Size(tabW, 32),
+                Font = LauncherTheme.SubheaderFont,
+                BaseColor = Color.FromArgb(20, 26, 38),
+                AccentColor = LauncherTheme.TextMuted,
+                ShowAccentBorder = false
+            };
+            _btnTabSave.Click += (s, e) => SwitchTab(false);
+            _sidebarPanel.Controls.Add(_btnTabSave);
+
+            // 3. Game Tab Panel
+            _panelGameTab = new Panel
+            {
+                Location = new Point(PADDING_X, 102),
+                Size = new Size(CONTENT_WIDTH, 480),
+                BackColor = LauncherTheme.SidebarDark
+            };
+
+            // Game: Launch Button
             _btnLaunch = new ModernButton
             {
                 Text = "▶  START GAME",
-                Location = new Point(PADDING_X, 70),
+                Location = new Point(0, 0),
                 Size = new Size(CONTENT_WIDTH, 48),
                 BaseColor = Color.FromArgb(30, 80, 50),
                 HoverColor = Color.FromArgb(40, 110, 68),
@@ -133,18 +199,18 @@ namespace G3P2Launcher.UI
                 ShowAccentBorder = true
             };
             _btnLaunch.Click += OnLaunchButtonClicked;
-            _sidebarPanel.Controls.Add(_btnLaunch);
+            _panelGameTab.Controls.Add(_btnLaunch);
 
-            // Dynamic Scale Section View
+            // Game: Dynamic Scale Section View
             _scaleSectionView = new ScaleSectionView(_launcherConfig, CONTENT_WIDTH)
             {
-                Location = new Point(PADDING_X, 130)
+                Location = new Point(0, 58)
             };
             _scaleSectionView.ScaleSelected += (s, scale) => SetScale(scale);
             _scaleSectionView.LayoutChanged += (s, e) => UpdateSidebarVerticalLayout();
-            _sidebarPanel.Controls.Add(_scaleSectionView);
+            _panelGameTab.Controls.Add(_scaleSectionView);
 
-            // Window / Mouse Behavior Header
+            // Game: Window / Mouse Behavior Header
             _lblWindowSec = new Label
             {
                 Text = "WINDOW & MOUSE",
@@ -153,9 +219,9 @@ namespace G3P2Launcher.UI
                 UseMnemonic = false,
                 Size = new Size(CONTENT_WIDTH, 18)
             };
-            _sidebarPanel.Controls.Add(_lblWindowSec);
+            _panelGameTab.Controls.Add(_lblWindowSec);
 
-            // TopMost Toggle Button [F12]
+            // Game: TopMost Toggle Button [F12]
             _btnTopMost = new ModernButton
             {
                 Text = "📌 Always on Top [F12] (OFF)",
@@ -165,9 +231,9 @@ namespace G3P2Launcher.UI
                 ShowAccentBorder = true
             };
             _btnTopMost.Click += (s, e) => ToggleTopMost();
-            _sidebarPanel.Controls.Add(_btnTopMost);
+            _panelGameTab.Controls.Add(_btnTopMost);
 
-            // Mouse Lock Button [F11]
+            // Game: Mouse Lock Button [F11]
             _btnMouseClip = new ModernButton
             {
                 Text = "🖱️ Mouse Free [F11]",
@@ -177,9 +243,29 @@ namespace G3P2Launcher.UI
                 ShowAccentBorder = true
             };
             _btnMouseClip.Click += (s, e) => ToggleMouseLock();
-            _sidebarPanel.Controls.Add(_btnMouseClip);
+            _panelGameTab.Controls.Add(_btnMouseClip);
 
-            // Status Bar at bottom
+            _sidebarPanel.Controls.Add(_panelGameTab);
+
+            // 4. Save Tab Panel
+            _panelSaveTab = new Panel
+            {
+                Location = new Point(PADDING_X, 102),
+                Size = new Size(CONTENT_WIDTH, 480),
+                BackColor = LauncherTheme.SidebarDark,
+                Visible = false
+            };
+
+            _saveSectionView = new SaveSectionView(_gameDir, _editorServer, CONTENT_WIDTH)
+            {
+                Location = new Point(0, 0)
+            };
+            _saveSectionView.StatusMessageChanged += (s, msg) => _lblStatus.Text = "STATUS: " + msg;
+            _panelSaveTab.Controls.Add(_saveSectionView);
+
+            _sidebarPanel.Controls.Add(_panelSaveTab);
+
+            // 5. Status Bar at bottom
             _lblStatus = new Label
             {
                 Text = "STATUS: Ready",
@@ -192,22 +278,47 @@ namespace G3P2Launcher.UI
             _sidebarPanel.Controls.Add(_lblStatus);
 
             UpdateSidebarVerticalLayout();
+            SwitchTab(true);
+        }
+
+        private void SwitchTab(bool isGameTab)
+        {
+            _panelGameTab.Visible = isGameTab;
+            _panelSaveTab.Visible = !isGameTab;
+
+            _btnTabGame.ShowAccentBorder = isGameTab;
+            _btnTabGame.BaseColor = isGameTab ? Color.FromArgb(32, 50, 75) : Color.FromArgb(20, 26, 38);
+            _btnTabGame.AccentColor = isGameTab ? LauncherTheme.AccentCyan : LauncherTheme.TextMuted;
+
+            _btnTabSave.ShowAccentBorder = !isGameTab;
+            _btnTabSave.BaseColor = !isGameTab ? Color.FromArgb(32, 50, 75) : Color.FromArgb(20, 26, 38);
+            _btnTabSave.AccentColor = !isGameTab ? LauncherTheme.AccentGold : LauncherTheme.TextMuted;
+
+            _btnTabGame.Invalidate();
+            _btnTabSave.Invalidate();
+
+            if (!isGameTab && _saveSectionView != null)
+            {
+                _saveSectionView.RefreshSaveList();
+            }
         }
 
         private void UpdateSidebarVerticalLayout()
         {
-            if (_scaleSectionView == null) return;
+            if (_scaleSectionView == null || _panelGameTab == null) return;
 
             int curY = _scaleSectionView.Bottom + 16;
 
-            _lblWindowSec.Location = new Point(PADDING_X, curY);
+            _lblWindowSec.Location = new Point(0, curY);
             curY += 24;
 
-            _btnTopMost.Location = new Point(PADDING_X, curY);
+            _btnTopMost.Location = new Point(0, curY);
             curY += 44;
 
-            _btnMouseClip.Location = new Point(PADDING_X, curY);
+            _btnMouseClip.Location = new Point(0, curY);
             curY += 44;
+
+            _panelGameTab.Height = curY + 10;
         }
 
         private void SetScale(double scale)
@@ -229,21 +340,31 @@ namespace G3P2Launcher.UI
 
         private void ToggleTopMost()
         {
-            TopMost = !TopMost;
+            SetTopMost(!TopMost);
+        }
 
-            if (TopMost)
+        private void SetTopMost(bool topMost)
+        {
+            TopMost = topMost;
+            _launcherConfig.AlwaysOnTop = topMost;
+            _launcherConfig.Save();
+
+            if (_btnTopMost != null)
             {
-                _btnTopMost.Text = "📌 Always on Top [F12] (ON)";
-                _btnTopMost.BaseColor = Color.FromArgb(24, 60, 45);
-                _btnTopMost.AccentColor = LauncherTheme.AccentGold;
+                if (TopMost)
+                {
+                    _btnTopMost.Text = "📌 Always on Top [F12] (ON)";
+                    _btnTopMost.BaseColor = Color.FromArgb(24, 60, 45);
+                    _btnTopMost.AccentColor = LauncherTheme.AccentGold;
+                }
+                else
+                {
+                    _btnTopMost.Text = "📌 Always on Top [F12] (OFF)";
+                    _btnTopMost.BaseColor = Color.FromArgb(28, 45, 65);
+                    _btnTopMost.AccentColor = LauncherTheme.AccentCyan;
+                }
+                _btnTopMost.Invalidate();
             }
-            else
-            {
-                _btnTopMost.Text = "📌 Always on Top [F12] (OFF)";
-                _btnTopMost.BaseColor = Color.FromArgb(28, 45, 65);
-                _btnTopMost.AccentColor = LauncherTheme.AccentCyan;
-            }
-            _btnTopMost.Invalidate();
         }
 
         private void ToggleMouseLock()
@@ -261,6 +382,13 @@ namespace G3P2Launcher.UI
             {
                 if (_isGameRunning)
                 {
+                    if (_embedder.GameHwnd != IntPtr.Zero && !_isGameInputEnabled)
+                    {
+                        _embedder.UnfreezeGameMouse();
+                        Win32Api.EnableWindow(_embedder.GameHwnd, true);
+                        _isGameInputEnabled = true;
+                    }
+
                     var rect = new Win32Api.RECT();
                     Win32Api.GetClientRect(_viewportPanel.Handle, out rect);
                     Point p1 = _viewportPanel.PointToScreen(new Point(rect.Left, rect.Top));
@@ -313,6 +441,9 @@ namespace G3P2Launcher.UI
             }
 
             _isGameRunning = true;
+            _isGameInputEnabled = true;
+            if (_mouseWatchTimer != null) _mouseWatchTimer.Start();
+
             _btnLaunch.Text = "■  STOP GAME";
             _btnLaunch.BaseColor = Color.FromArgb(80, 30, 30);
             _btnLaunch.HoverColor = Color.FromArgb(110, 40, 40);
@@ -332,6 +463,10 @@ namespace G3P2Launcher.UI
                 Invoke(new Action<object, EventArgs>(OnGameExited), sender, e);
                 return;
             }
+
+            if (_mouseWatchTimer != null) _mouseWatchTimer.Stop();
+            _embedder.UnfreezeGameMouse();
+            _isGameInputEnabled = true;
 
             _isGameRunning = false;
             Win32Api.ClipCursor(IntPtr.Zero);
@@ -408,11 +543,64 @@ namespace G3P2Launcher.UI
             Win32Api.UnregisterHotKey(this.Handle, HOTKEY_ID_TOPMOST);
             Win32Api.ClipCursor(IntPtr.Zero);
 
-            if (_isGameRunning)
+            if (_mouseWatchTimer != null)
             {
-                _embedder.TerminateGame();
+                _mouseWatchTimer.Stop();
+                _mouseWatchTimer.Dispose();
+                _mouseWatchTimer = null;
             }
+
+            if (_editorServer != null)
+            {
+                _editorServer.Stop();
+            }
+
+            // Always terminate game on close, ensuring no orphaned background processes
+            _embedder.TerminateGame();
+
             base.OnFormClosing(e);
+        }
+
+        private void InitMouseWatcher()
+        {
+            _mouseWatchTimer = new System.Windows.Forms.Timer();
+            _mouseWatchTimer.Interval = 25; // ~40Hz responsive tracking with zero noticeable CPU overhead
+            _mouseWatchTimer.Tick += OnMouseWatchTick;
+        }
+
+        private void OnMouseWatchTick(object sender, EventArgs e)
+        {
+            if (!_isGameRunning || _embedder.GameHwnd == IntPtr.Zero) return;
+
+            // When mouse is locked inside viewport, it is always guaranteed to be inside
+            if (!_isMouseFree)
+            {
+                if (!_isGameInputEnabled)
+                {
+                    _embedder.UnfreezeGameMouse();
+                    Win32Api.EnableWindow(_embedder.GameHwnd, true);
+                    _isGameInputEnabled = true;
+                }
+                return;
+            }
+
+            // Precision client coordinate check: handles DPI scaling, multi-monitors, and window borders
+            Point clientPt = _viewportPanel.PointToClient(Cursor.Position);
+            bool isInside = (clientPt.X >= 0 && clientPt.X < _viewportPanel.ClientSize.Width &&
+                             clientPt.Y >= 0 && clientPt.Y < _viewportPanel.ClientSize.Height);
+
+            if (isInside && !_isGameInputEnabled)
+            {
+                _embedder.UnfreezeGameMouse();
+                Win32Api.EnableWindow(_embedder.GameHwnd, true);
+                _isGameInputEnabled = true;
+            }
+            else if (!isInside && _isGameInputEnabled)
+            {
+                _embedder.FreezeGameMouse();
+                Win32Api.EnableWindow(_embedder.GameHwnd, false);
+                _isGameInputEnabled = false;
+            }
         }
     }
 }

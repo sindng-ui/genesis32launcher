@@ -26,11 +26,13 @@ namespace G3P2Launcher.Core
 
         public double CurrentScale { get; set; }
         public List<double> CustomScales { get; private set; }
+        public bool AlwaysOnTop { get; set; }
 
         public LauncherConfig()
         {
             CurrentScale = 1.0;
             CustomScales = new List<double>();
+            AlwaysOnTop = false;
         }
 
         public static LauncherConfig Load()
@@ -81,6 +83,22 @@ namespace G3P2Launcher.Core
                             }
                         }
                     }
+                    else if (key.Equals("AlwaysOnTop", StringComparison.OrdinalIgnoreCase))
+                    {
+                        bool b;
+                        if (bool.TryParse(val, out b))
+                        {
+                            config.AlwaysOnTop = b;
+                        }
+                        else if (val == "1")
+                        {
+                            config.AlwaysOnTop = true;
+                        }
+                        else if (val == "0")
+                        {
+                            config.AlwaysOnTop = false;
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -99,6 +117,7 @@ namespace G3P2Launcher.Core
                 sb.AppendLine("; G3P2Launcher User Settings");
                 sb.AppendLine("[Settings]");
                 sb.AppendLine("CurrentScale=" + CurrentScale.ToString("F2", CultureInfo.InvariantCulture));
+                sb.AppendLine("AlwaysOnTop=" + (AlwaysOnTop ? "1" : "0"));
 
                 var scalesStr = new StringBuilder();
                 for (int i = 0; i < CustomScales.Count; i++)

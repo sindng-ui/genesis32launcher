@@ -24,11 +24,13 @@ SOURCES=(
     "src\\Core\\LauncherConfig.cs"
     "src\\Core\\DDrawConfig.cs"
     "src\\Core\\AudioRegistryHelper.cs"
+    "src\\Core\\EditorHttpServer.cs"
     "src\\Core\\GameEmbedder.cs"
     "src\\UI\\LauncherTheme.cs"
     "src\\UI\\ModernButton.cs"
     "src\\UI\\ModernSlider.cs"
     "src\\UI\\ScaleSectionView.cs"
+    "src\\UI\\SaveSectionView.cs"
     "src\\UI\\LauncherForm.cs"
     "src\\Program.cs"
 )
@@ -48,6 +50,7 @@ OUT_EXE="bin\\G3P2Launcher.exe"
     "${SOURCES[@]}"
 
 cp -f bin/G3P2Launcher.exe ./G3P2Launcher.exe
+mkdir -p bin/editor && cp -ru editor/* bin/editor/ 2>/dev/null || true
 
 echo "=== Build successful! Output: bin/G3P2Launcher.exe and ./G3P2Launcher.exe ==="
 ls -lh bin/G3P2Launcher.exe G3P2Launcher.exe

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>창세기전 3 파트 2 세이브 에디터 (Genesis 3 Part 2 Save Editor)</title>
+  <link rel="stylesheet" href="src/css/theme.css">
+  <link rel="stylesheet" href="src/css/style.css">
+</head>
+<body ondragover="event.preventDefault()" ondrop="event.preventDefault()">
+  <!-- Header Bar -->
+  <header class="app-header">
+    <div class="brand-area">
+      <div class="brand-icon">G3</div>
+      <div>
+        <div class="brand-title">창세기전 3 파트 2 <span>세이브 에디터</span></div>
+      </div>
+      <div id="currentFileName" class="brand-badge">세이브 파일을 열어주세요</div>
+    </div>
+
+      <button id="btnInventory" class="btn btn-secondary" disabled title="군단 소지품(인벤토리)을 확인하고 아이템을 추가/수정합니다.">
+        🎒 소지품
+      </button>
+      <button id="btnAllMaxStats" class="btn btn-accent" disabled title="모든 아군 캐릭터의 스탯 및 레벨을 MAX로 설정합니다.">
+        ⚡ 전체 MAX 치트
+      </button>
+      <button id="btnDownloadBackup" class="btn btn-secondary" disabled title="수정 전 원본 파일(.bak)을 다운로드합니다.">
+        💾 원본 백업(.bak)
+      </button>
+      <button id="btnSaveFile" class="btn btn-primary" disabled title="수정된 내용을 .sav 파일로 다운로드합니다.">
+        📥 세이브 저장(.sav)
+      </button>
+      <label for="fileInput" id="btnOpenAnother" class="btn btn-secondary" style="display:none; cursor:pointer;" title="다른 세이브 파일을 엽니다.">
+        📂 다른 세이브 열기
+      </label>
+    </div>
+  </header>
+
+  <!-- File Dropzone (Initial state) -->
+  <input type="file" id="fileInput" accept=".sav, *.*" style="display:none;" />
+  <div id="dropzone" class="dropzone-overlay">
+    <div class="dropzone-icon">🎮</div>
+    <div class="dropzone-title">창세기전 3 파트 2 세이브 파일(.sav)을 끌어다 놓으세요</div>
+    <div class="dropzone-desc">클릭하여 파일을 선택하거나, 게임 폴더의 G3P_II00.sav ~ G3P_II20.sav 파일을 드래그하세요.</div>
+    <div class="dropzone-buttons">
+      <label for="fileInput" id="btnSelectFile" class="btn btn-primary" style="cursor:pointer;">파일 선택</label>
+      <button id="btnLoadSample01" class="btn btn-accent">샘플 열기 (G3P_II01.sav)</button>
+      <button id="btnLoadSample00" class="btn btn-secondary">샘플 열기 (G3P_II00.sav)</button>
+      <button id="btnLoadSample" class="btn btn-emerald">샘플 열기 (G3P_II20.sav)</button>
+    </div>
+  </div>
+
+  <!-- Main Editor Layout (Visible after file loaded) -->
+  <main id="mainLayout" class="app-main" style="display:none;">
+    <!-- Left Sidebar: Character List -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <input type="text" id="searchChar" class="search-input" placeholder="캐릭터 검색 (이름 또는 ID)..." />
+      </div>
+      <div id="charListContainer" class="char-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </aside>
+
+    <!-- Right Content: Character Detail Editor -->
+    <section id="charDetailContainer" class="editor-panel">
+      <!-- Rendered dynamically -->
+    </section>
+  </main>
+
+  <!-- Scripts: Modular feature scripts & Standalone bundle -->
+  <script src="src/js/features/inventoryStore.js"></script>
+  <script src="src/js/bundle.js?v=20261005_8"></script>
+  <script src="src/js/ui/inventoryPanel.js"></script>
+</body>
+</html>

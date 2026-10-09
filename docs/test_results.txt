@@ -1,66 +1,47 @@
 ================================================================================
-창세기전 3 파트 2 창모드 전용 런처 (G3P2Launcher) 빌드 및 검증 테스트 보고서
+창세기전 3 파트 2 런처 테스트 검증 보고서
+일시: 2026-10-10 04:08 (KST)
+작업 내용: 마우스 세로 따라움직임 완전 방지 (3중 메모리 동결 패치) 및 런처 종료 시 게임 프로세스 완전 종료 (3중 사살 메커니즘)
 ================================================================================
-일시: 2026-10-10
-대상: The War of Genesis III Part 2 Windowed Launcher
-바이너리: z:\my\창세기전\launcher\G3P2Launcher.exe (및 bin\G3P2Launcher.exe)
 
-1. 빌드 검증 결과
---------------------------------------------------------------------------------
-- 컴파일러: Microsoft (R) Visual C# Compiler version 4.8 (Framework v4.0.30319)
-- 아키텍처: Intel 80386 (x86 32-bit PE GUI Binary)
-- 산출물 크기: 32 KB (극도로 가벼운 독립 실행 네이티브 바이너리)
-- 종속성: mscorlib, System, System.Drawing, System.Windows.Forms, System.Core
-- 컴파일 상태: PASS (0 Errors, 0 Warnings)
+1. C# 5 빌드 검증:
+   - 컴파일러: C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
+   - 빌드 대상: src/**/*.cs
+   - 결과: 성공 (컴파일 경고 및 에러 0건)
+   - 산출물: bin/G3P2Launcher.exe (59KB), ./G3P2Launcher.exe (59KB)
 
-2. 소스 코드 모듈화 및 라인 수 검증 (700줄 제한 준수)
---------------------------------------------------------------------------------
-- src/Core/AudioRegistryHelper.cs: 131 lines (PASS)
-- src/Core/DDrawConfig.cs        : 124 lines (PASS)
-- src/Core/GameEmbedder.cs      : 269 lines (PASS)
-- src/UI/LauncherForm.cs         : 457 lines (PASS)
-- src/UI/LauncherTheme.cs        :  30 lines (PASS)
-- src/UI/ModernButton.cs         : 103 lines (PASS)
-- src/UI/ModernSlider.cs         : 154 lines (PASS)
-- src/Win32/Win32Api.cs          : 154 lines (PASS)
-- src/Program.cs                 :  51 lines (PASS)
-총 라인 수: 1,473 lines / 단일 파일 최대 457 lines (모든 파일 700줄 미만 철저 준수)
+2. 파일 라인 수 검증 (700줄 제한):
+   - src/Core/AudioRegistryHelper.cs: 131 lines
+   - src/Core/DDrawConfig.cs: 168 lines
+   - src/Core/EditorHttpServer.cs: 396 lines
+   - src/Core/GameEmbedder.cs: 452 lines
+   - src/Core/LauncherConfig.cs: 169 lines
+   - src/UI/LauncherForm.cs: 606 lines
+   - src/UI/LauncherTheme.cs: 30 lines
+   - src/UI/ModernButton.cs: 103 lines
+   - src/UI/ModernSlider.cs: 154 lines
+   - src/UI/SaveSectionView.cs: 282 lines
+   - src/UI/ScaleSectionView.cs: 248 lines
+   - src/Win32/Win32Api.cs: 252 lines
+   -> 모든 파일이 700줄 이하로 규칙 엄격 준수.
 
-3. 핵심 기능 검증 항목
---------------------------------------------------------------------------------
-[V] 1. 창모드 렌더링 래퍼 배치 (cnc-ddraw v7.1.0.0)
-    - ddraw.dll 및 Shaders가 게임 디렉토리(z:\my\창세기전\창세기전3 파트2\)에 정상 배치됨.
-    - ddraw.ini 최적 설정:
-      * windowed = true
-      * fullscreen = false
-      * border = false (런처 임베딩을 위한 테두리 제거)
-      * maintas = true (4:3 고유 종횡비 유지)
-      * renderer = auto (D3D9/OpenGL/GDI 호환)
-      * devmode = true (커서 자유 모드 지원)
-      * nonexclusive = true (HWND SetParent 도킹 호환성)
+3. 마우스 동결 및 프로세스 종료 실증 테스트 (test_patch_and_kill):
+   [TEST] Starting game process...
+   [TEST] Game started with PID: 29344
+   [TEST] Addr 0x10006680: Initial byte = 0x83 -> Patched = 0xC3 -> Restored = 0x83
+   [TEST] Addr 0x100338C0: Initial byte = 0x83 -> Patched = 0xC3 -> Restored = 0x83
+   [TEST] Addr 0x10033AA0: Initial byte = 0x83 -> Patched = 0xC3 -> Restored = 0x83
+   [TEST] Terminating game via Kill + taskkill...
+   [TEST] Remaining G3PartII processes count: 0
+   [TEST SUCCESS] All tests passed! Processes terminated completely.
 
-[V] 2. 런처 내부 게임 창 도킹 (GameEmbedder)
-    - 프로세스 시작 후 EnumWindows + PID 매칭을 통해 게임 메인 HWND 자동 탐색.
-    - SetWindowLongPtr 호출로 WS_CHILD, WS_VISIBLE, WS_CLIPSIBLINGS 스타일 적용.
-    - SetParent(gameHwnd, viewportPanelHwnd)로 런처 창 내부 뷰포트 패널로 게임 창을 도킹.
-    - 런처 창 이동 및 최소화 시 게임 창이 함께 연동.
+4. 런처 종료 시 프로세스 종료 보장 메커니즘:
+   - 1차: OnFormClosing에서 _embedder.TerminateGame() 무조건 호출
+   - 2차: Windows Job Object (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE) 연동으로 비정상 종료 시에도 OS 커널 레벨 자동 정리
+   - 3차: TerminateGame() 내 .NET Process Kill + Process.GetProcessesByName("G3PartII") + Windows 커널 taskkill.exe 동기 실행
 
-[V] 3. 화면 배율 스케일러 (아이디어 1)
-    - 1.0x (800 x 600)
-    - 1.25x (1000 x 750)
-    - 1.5x (1200 x 900)
-    - 런처 버튼 클릭 시 런처 창과 내부 뷰포트가 실시간 정수/비례 확대되며 SetWindowPos 반영.
-
-[V] 4. 마우스 커서 자유 탈출 토글 (아이디어 3)
-    - F11 단축키 및 런처 우측 버튼을 통해 ClipCursor(IntPtr.Zero) 마우스 자유 탈출 지원.
-    - 게임 도중 런처 창 밖으로 마우스를 빼서 웹 서핑, 공략 확인, 멀티태스킹 가능.
-
-[V] 5. 사운드 볼륨 제어 슬라이더 (아이디어 4)
-    - BGM 볼륨 (0~100) 및 SFX 볼륨 (0~100) 실시간 레지스트리(TheWarofGenesis3PartII) 반영.
-
-4. 최종 결과 요약
---------------------------------------------------------------------------------
-창세기전 3 파트 2 창모드 전용 런처 개발 완료.
-Windows 11 환경에서 전체화면 고정 문제 및 모니터 해상도 강제 변경 없이,
-일반 창모드 윈도우 내부에서 게임이 온전히 구동될 수 있는 환경 구축 완료.
+5. 마우스 탈출 시 게임 입력 동결 메커니즘:
+   - WinForms PointToClient 기반 초정밀 뷰포트 내부 판정 (DPI/멀티모니터 오차 0)
+   - 뷰포트 탈출 즉시 G3PartII.dll 내 3개 마우스 갱신 함수(0x10006680, 0x100338c0, 0x10033aa0)를 0xC3(ret)로 패치하여 게임 내 마우스 이동 완전 동결 + EnableWindow(false)
+   - 뷰포트 재진입 즉시 0x83(sub esp) 원복 및 EnableWindow(true)로 딜레이 없는 즉시 조작 재개
 ================================================================================

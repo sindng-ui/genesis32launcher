@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +16,15 @@ namespace G3P2Launcher.Core
         private IntPtr _parentContainerHwnd = IntPtr.Zero;
         private readonly object _lockObj = new object();
         private System.Windows.Forms.Timer _dockKeepTimer;
+        private IntPtr _hJob = IntPtr.Zero;
+        private IntPtr _hProcess = IntPtr.Zero;
+        private bool _isMouseFrozen = false;
+        private static readonly IntPtr[] MOUSE_HOOK_ADDRS = new IntPtr[]
+        {
+            new IntPtr(0x10006680), // Global UpdateMouse
+            new IntPtr(0x100338c0), // UI Mouse Handler
+            new IntPtr(0x10033aa0)  // UI Loop Mouse Handler
+        };
 
         public event EventHandler<IntPtr> GameEmbedded;
         public event EventHandler GameExited;
@@ -22,6 +32,36 @@ namespace G3P2Launcher.Core
 
         public bool IsRunning { get { return _gameProcess != null && !_gameProcess.HasExited; } }
         public IntPtr GameHwnd { get { return _gameHwnd; } }
+
+        public GameEmbedder()
+        {
+            InitJobObject();
+        }
+
+        private void InitJobObject()
+        {
+            try
+            {
+                _hJob = Win32Api.CreateJobObject(IntPtr.Zero, null);
+                if (_hJob != IntPtr.Zero)
+                {
+                    var info = new Win32Api.JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+                    info.BasicLimitInformation.LimitFlags = Win32Api.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                    int length = Marshal.SizeOf(typeof(Win32Api.JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+                    IntPtr pInfo = Marshal.AllocHGlobal(length);
+                    try
+                    {
+                        Marshal.StructureToPtr(info, pInfo, false);
+                        Win32Api.SetInformationJobObject(_hJob, Win32Api.JobObjectExtendedLimitInformation, pInfo, (uint)length);
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(pInfo);
+                    }
+                }
+            }
+            catch { }
+        }
 
         private void RaiseStatus(string msg)
         {
@@ -90,6 +130,17 @@ namespace G3P2Launcher.Core
                     RaiseStatus("Failed to start game process.");
                     return false;
                 }
+
+                if (_hJob != IntPtr.Zero)
+                {
+                    try { Win32Api.AssignProcessToJobObject(_hJob, _gameProcess.Handle); } catch { }
+                }
+
+                try
+                {
+                    _hProcess = Win32Api.OpenProcess(Win32Api.PROCESS_ALL_ACCESS, false, _gameProcess.Id);
+                }
+                catch { }
 
                 _gameProcess.EnableRaisingEvents = true;
                 _gameProcess.Exited += OnProcessExited;
@@ -160,24 +211,109 @@ namespace G3P2Launcher.Core
                     _dockKeepTimer = null;
                 }
 
-                if (IsRunning)
+                UnfreezeGameMouse();
+
+                if (_hProcess != IntPtr.Zero)
+                {
+                    Win32Api.CloseHandle(_hProcess);
+                    _hProcess = IntPtr.Zero;
+                }
+
+                if (_gameProcess != null && !_gameProcess.HasExited)
                 {
                     RaiseStatus("Terminating game process...");
-                    _gameProcess.CloseMainWindow();
-
-                    Task.Run(() =>
+                    try
                     {
-                        if (!_gameProcess.WaitForExit(1500))
-                        {
-                            _gameProcess.Kill();
-                        }
-                    });
+                        _gameProcess.Kill();
+                        _gameProcess.WaitForExit(500);
+                    }
+                    catch { }
                 }
+
+                // 1. Force kill any remaining orphaned game processes via .NET
+                foreach (var proc in Process.GetProcessesByName("G3PartII"))
+                {
+                    try { proc.Kill(); } catch { }
+                }
+
+                // 2. Kill via Windows taskkill command for 100% kernel cleanup
+                try
+                {
+                    var psi = new ProcessStartInfo("taskkill", "/F /IM G3PartII.exe /T")
+                    {
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    };
+                    using (var killProc = Process.Start(psi))
+                    {
+                        if (killProc != null) killProc.WaitForExit(500);
+                    }
+                }
+                catch { }
             }
             catch (Exception ex)
             {
                 RaiseStatus("Error terminating game: " + ex.Message);
             }
+        }
+
+        private bool EnsureProcessHandle()
+        {
+            if (_hProcess != IntPtr.Zero) return true;
+            if (_gameProcess == null || _gameProcess.HasExited) return false;
+            try
+            {
+                _hProcess = Win32Api.OpenProcess(Win32Api.PROCESS_ALL_ACCESS, false, _gameProcess.Id);
+                if (_hProcess == IntPtr.Zero)
+                {
+                    uint rights = Win32Api.PROCESS_VM_OPERATION | Win32Api.PROCESS_VM_READ | Win32Api.PROCESS_VM_WRITE | Win32Api.PROCESS_TERMINATE | Win32Api.PROCESS_QUERY_INFORMATION;
+                    _hProcess = Win32Api.OpenProcess(rights, false, _gameProcess.Id);
+                }
+            }
+            catch { }
+            return _hProcess != IntPtr.Zero;
+        }
+
+        public void FreezeGameMouse()
+        {
+            if (_isMouseFrozen || !EnsureProcessHandle()) return;
+            try
+            {
+                byte[] patch = new byte[] { 0xC3 }; // ret opcode
+                foreach (var addr in MOUSE_HOOK_ADDRS)
+                {
+                    uint oldProt;
+                    if (Win32Api.VirtualProtectEx(_hProcess, addr, (UIntPtr)1, Win32Api.PAGE_EXECUTE_READWRITE, out oldProt))
+                    {
+                        UIntPtr written;
+                        Win32Api.WriteProcessMemory(_hProcess, addr, patch, 1, out written);
+                        Win32Api.VirtualProtectEx(_hProcess, addr, (UIntPtr)1, oldProt, out oldProt);
+                    }
+                }
+                _isMouseFrozen = true;
+            }
+            catch { }
+        }
+
+        public void UnfreezeGameMouse()
+        {
+            if (!_isMouseFrozen || !EnsureProcessHandle()) return;
+            try
+            {
+                byte[] orig = new byte[] { 0x83 }; // sub esp, ...
+                foreach (var addr in MOUSE_HOOK_ADDRS)
+                {
+                    uint oldProt;
+                    if (Win32Api.VirtualProtectEx(_hProcess, addr, (UIntPtr)1, Win32Api.PAGE_EXECUTE_READWRITE, out oldProt))
+                    {
+                        UIntPtr written;
+                        Win32Api.WriteProcessMemory(_hProcess, addr, orig, 1, out written);
+                        Win32Api.VirtualProtectEx(_hProcess, addr, (UIntPtr)1, oldProt, out oldProt);
+                    }
+                }
+                _isMouseFrozen = false;
+            }
+            catch { }
         }
 
         private IntPtr WaitForGameWindow(int processId, int timeoutMs)
@@ -297,6 +433,14 @@ namespace G3P2Launcher.Core
                 _dockKeepTimer.Stop();
                 _dockKeepTimer.Dispose();
                 _dockKeepTimer = null;
+            }
+
+            UnfreezeGameMouse();
+
+            if (_hProcess != IntPtr.Zero)
+            {
+                Win32Api.CloseHandle(_hProcess);
+                _hProcess = IntPtr.Zero;
             }
 
             _gameHwnd = IntPtr.Zero;
