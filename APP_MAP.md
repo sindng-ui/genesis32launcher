@@ -17,9 +17,9 @@
 |  |     기반 창모드 렌더링       |  |    (1.0x, 1.25x, 1.5x,     |  |
 |  |   - G4MainWnd 정확 매칭     |  |     2.0x, 2.2x ... 버튼들) |  |
 |  |   - SetParent(game, panel)  |  |    [배율 입력] [ + Add ]   |  |
-|  |   - fixchilds=0 업스케일링   |  |   [마우스 자유 토글 (F11)] |  |
-|  |   - 동적 배율 ini 자동 주입 |  |   [사운드 볼륨 제어]       |  |
-|  |   - 배율 설정 영구 저장     |  |    (BGM / SFX 슬라이더)    |  |
+|  |   - fixchilds=0 업스케일링   |  |   [WINDOW & MOUSE]         |  |
+|  |   - 동적 배율 ini 자동 주입 |  |    [항상 위 토글 (F12)]    |  |
+|  |   - 배율 설정 영구 저장     |  |    [마우스 자유 토글 (F11)]|  |
 |  |   - 동적 세로 자동 정렬     |  |                            |  |
 |  +-----------------------------+  +----------------------------+  |
 +-------------------------------------------------------------------+
@@ -61,9 +61,9 @@
 | `src/Core/AudioRegistryHelper.cs` | 볼륨(BGM/SFX) 레지스트리 읽기/쓰기 헬퍼 | 구현됨 | 131 lines |
 | `src/UI/LauncherTheme.cs` | 사이버 다크 테마 컬러 팔레트 및 폰트 정의 | 구현됨 | 30 lines |
 | `src/UI/ModernButton.cs` | 블러 없는 세련된 커스텀 플랫 버튼 컨트롤 | 구현됨 | 103 lines |
-| `src/UI/ModernSlider.cs` | 볼륨 조절용 커스텀 트랙바 슬라이더 컨트롤 | 구현됨 | 154 lines |
+| `src/UI/ModernSlider.cs` | 커스텀 트랙바 슬라이더 컨트롤 (재사용 가능 컴포넌트) | 구현됨 | 154 lines |
 | `src/UI/ScaleSectionView.cs` | 고정 좌표 그리드, 오름차순 정렬 및 동적 높이 반응형 배율 UI (우클릭 삭제 지원) | 개선 완료 | 248 lines |
-| `src/UI/LauncherForm.cs` | 310px 시원한 확장 사이드바 및 동적 세로 자동 정렬 런처 메인 폼 | 개선 완료 | 456 lines |
+| `src/UI/LauncherForm.cs` | 310px 확장 사이드바, F12 항상 최상단 토글, F11 마우스 자유 토글 메인 폼 | 개선 완료 | 418 lines |
 | `assets/cnc-ddraw/` | cnc-ddraw v7.1.0.0 바이너리 및 셰이더 리소스 | 준비됨 | 리소스 |
 | `docs/implementation_plan.md` | 구현 계획서 | 작성됨 | 문서 |
 | `docs/task.md` | 작업 단계별 체크리스트 | 작성됨 | 문서 |
@@ -88,5 +88,7 @@
 - `void RebuildScaleButtons()`: 기본 프리셋(1.0x, 1.25x, 1.5x, 2.0x)과 커스텀 배율 버튼들 동적 재구성 (우클릭 삭제 메뉴 지원)
 
 ### 4.3 LauncherForm (`src/UI/LauncherForm.cs`)
-- `void UpdateSidebarVerticalLayout()`: 배율 섹션 크기 변화에 따라 하위 섹션(마우스/사운드 등)의 세로 위치를 자동으로 유연하게 재정렬
+- `void ToggleTopMost()`: F12 단축키 및 사이드바 버튼으로 Form의 `TopMost` 속성 토글 (ON/OFF 시각적 피드백)
+- `void ToggleMouseLock()`: F11 단축키 및 사이드바 버튼으로 마우스 커서 화면 가둠 / 자유 탈출 토글
+- `void UpdateSidebarVerticalLayout()`: 배율 섹션 크기 변화에 따라 하위 섹션(WINDOW & MOUSE)의 세로 위치를 자동으로 유연하게 재정렬
 - `void SetScale(double scale)`: 배율에 따른 런처 창 크기 및 뷰포트 크기 변경, ddraw.ini 해상도 자동 동기화

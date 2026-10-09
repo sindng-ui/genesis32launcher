@@ -10,7 +10,9 @@ namespace G3P2Launcher.UI
     public class LauncherForm : Form
     {
         private const int HOTKEY_ID_MOUSE = 0x5411;
+        private const int HOTKEY_ID_TOPMOST = 0x5412;
         private const int VK_F11 = 0x7A;
+        private const int VK_F12 = 0x7B;
         private const int SIDEBAR_WIDTH = 310;
         private const int CONTENT_WIDTH = 270;
         private const int PADDING_X = 20;
@@ -29,13 +31,9 @@ namespace G3P2Launcher.UI
         private Label _lblTitle;
         private ModernButton _btnLaunch;
         private ScaleSectionView _scaleSectionView;
-        private Label _lblMouseSec;
+        private Label _lblWindowSec;
+        private ModernButton _btnTopMost;
         private ModernButton _btnMouseClip;
-        private Label _lblAudioSec;
-        private Label _lblBgm;
-        private ModernSlider _sliderBgm;
-        private Label _lblSfx;
-        private ModernSlider _sliderSfx;
         private Label _lblStatus;
 
         // State
@@ -60,10 +58,10 @@ namespace G3P2Launcher.UI
             _embedder.GameExited += OnGameExited;
 
             InitializeComponent();
-            ApplyInitialAudioSettings();
 
-            // Register F11 hotkey for toggling mouse lock/unlock
+            // Register F11 & F12 hotkeys
             Win32Api.RegisterHotKey(this.Handle, HOTKEY_ID_MOUSE, Win32Api.MOD_NONE, VK_F11);
+            Win32Api.RegisterHotKey(this.Handle, HOTKEY_ID_TOPMOST, Win32Api.MOD_NONE, VK_F12);
         }
 
         private void InitializeComponent()
@@ -146,17 +144,30 @@ namespace G3P2Launcher.UI
             _scaleSectionView.LayoutChanged += (s, e) => UpdateSidebarVerticalLayout();
             _sidebarPanel.Controls.Add(_scaleSectionView);
 
-            // Mouse Behavior Header
-            _lblMouseSec = new Label
+            // Window / Mouse Behavior Header
+            _lblWindowSec = new Label
             {
-                Text = "MOUSE BEHAVIOR",
+                Text = "WINDOW & MOUSE",
                 Font = LauncherTheme.SubheaderFont,
                 ForeColor = LauncherTheme.TextSecondary,
+                UseMnemonic = false,
                 Size = new Size(CONTENT_WIDTH, 18)
             };
-            _sidebarPanel.Controls.Add(_lblMouseSec);
+            _sidebarPanel.Controls.Add(_lblWindowSec);
 
-            // Mouse Lock Button
+            // TopMost Toggle Button [F12]
+            _btnTopMost = new ModernButton
+            {
+                Text = "📌 Always on Top [F12] (OFF)",
+                Size = new Size(CONTENT_WIDTH, 36),
+                BaseColor = Color.FromArgb(28, 45, 65),
+                AccentColor = LauncherTheme.AccentCyan,
+                ShowAccentBorder = true
+            };
+            _btnTopMost.Click += (s, e) => ToggleTopMost();
+            _sidebarPanel.Controls.Add(_btnTopMost);
+
+            // Mouse Lock Button [F11]
             _btnMouseClip = new ModernButton
             {
                 Text = "🖱️ Mouse Free [F11]",
@@ -167,62 +178,6 @@ namespace G3P2Launcher.UI
             };
             _btnMouseClip.Click += (s, e) => ToggleMouseLock();
             _sidebarPanel.Controls.Add(_btnMouseClip);
-
-            // Audio Header
-            _lblAudioSec = new Label
-            {
-                Text = "SOUND VOLUME",
-                Font = LauncherTheme.SubheaderFont,
-                ForeColor = LauncherTheme.TextSecondary,
-                Size = new Size(CONTENT_WIDTH, 18)
-            };
-            _sidebarPanel.Controls.Add(_lblAudioSec);
-
-            // BGM Label & Slider
-            _lblBgm = new Label
-            {
-                Text = "BGM Volume: 90%",
-                Font = LauncherTheme.SmallFont,
-                ForeColor = LauncherTheme.TextPrimary,
-                Size = new Size(CONTENT_WIDTH, 16)
-            };
-            _sidebarPanel.Controls.Add(_lblBgm);
-
-            _sliderBgm = new ModernSlider
-            {
-                Size = new Size(CONTENT_WIDTH, 22),
-                Value = AudioRegistryHelper.GetBgmVolume(),
-                FillColor = LauncherTheme.AccentGold
-            };
-            _sliderBgm.ValueChanged += (s, e) =>
-            {
-                _lblBgm.Text = string.Format("BGM Volume: {0}%", _sliderBgm.Value);
-                AudioRegistryHelper.SetBgmVolume(_sliderBgm.Value);
-            };
-            _sidebarPanel.Controls.Add(_sliderBgm);
-
-            // SFX Label & Slider
-            _lblSfx = new Label
-            {
-                Text = "SFX Volume: 100%",
-                Font = LauncherTheme.SmallFont,
-                ForeColor = LauncherTheme.TextPrimary,
-                Size = new Size(CONTENT_WIDTH, 16)
-            };
-            _sidebarPanel.Controls.Add(_lblSfx);
-
-            _sliderSfx = new ModernSlider
-            {
-                Size = new Size(CONTENT_WIDTH, 22),
-                Value = AudioRegistryHelper.GetSfxVolume(),
-                FillColor = LauncherTheme.AccentCyan
-            };
-            _sliderSfx.ValueChanged += (s, e) =>
-            {
-                _lblSfx.Text = string.Format("SFX Volume: {0}%", _sliderSfx.Value);
-                AudioRegistryHelper.SetSfxVolume(_sliderSfx.Value);
-            };
-            _sidebarPanel.Controls.Add(_sliderSfx);
 
             // Status Bar at bottom
             _lblStatus = new Label
@@ -245,26 +200,14 @@ namespace G3P2Launcher.UI
 
             int curY = _scaleSectionView.Bottom + 16;
 
-            _lblMouseSec.Location = new Point(PADDING_X, curY);
-            curY += 22;
+            _lblWindowSec.Location = new Point(PADDING_X, curY);
+            curY += 24;
+
+            _btnTopMost.Location = new Point(PADDING_X, curY);
+            curY += 44;
 
             _btnMouseClip.Location = new Point(PADDING_X, curY);
-            curY += 46;
-
-            _lblAudioSec.Location = new Point(PADDING_X, curY);
-            curY += 22;
-
-            _lblBgm.Location = new Point(PADDING_X, curY);
-            curY += 18;
-
-            _sliderBgm.Location = new Point(PADDING_X, curY);
-            curY += 32;
-
-            _lblSfx.Location = new Point(PADDING_X, curY);
-            curY += 18;
-
-            _sliderSfx.Location = new Point(PADDING_X, curY);
-            curY += 36;
+            curY += 44;
         }
 
         private void SetScale(double scale)
@@ -282,6 +225,25 @@ namespace G3P2Launcher.UI
             {
                 _embedder.ResizeViewport(_viewportPanel.ClientSize.Width, _viewportPanel.ClientSize.Height);
             }
+        }
+
+        private void ToggleTopMost()
+        {
+            TopMost = !TopMost;
+
+            if (TopMost)
+            {
+                _btnTopMost.Text = "📌 Always on Top [F12] (ON)";
+                _btnTopMost.BaseColor = Color.FromArgb(24, 60, 45);
+                _btnTopMost.AccentColor = LauncherTheme.AccentGold;
+            }
+            else
+            {
+                _btnTopMost.Text = "📌 Always on Top [F12] (OFF)";
+                _btnTopMost.BaseColor = Color.FromArgb(28, 45, 65);
+                _btnTopMost.AccentColor = LauncherTheme.AccentCyan;
+            }
+            _btnTopMost.Invalidate();
         }
 
         private void ToggleMouseLock()
@@ -401,7 +363,7 @@ namespace G3P2Launcher.UI
 
                 string title = "창세기전 3 PART 2";
                 string sub = "우측 사이드바의 [▶ START GAME] 버튼을 누르면 이 창 안에서 게임이 실행됩니다.";
-                string note = "단축키 F11: 마우스 런처 밖 자유 이동 / 잠금 토글";
+                string note = "단축키: [F11] 마우스 자유 이동 토글  |  [F12] 항상 최상단 표시 토글";
 
                 using (var brush = new SolidBrush(LauncherTheme.AccentGold))
                 using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
@@ -423,20 +385,19 @@ namespace G3P2Launcher.UI
             }
         }
 
-        private void ApplyInitialAudioSettings()
-        {
-            _sliderBgm.Value = AudioRegistryHelper.GetBgmVolume();
-            _lblBgm.Text = string.Format("BGM Volume: {0}%", _sliderBgm.Value);
-
-            _sliderSfx.Value = AudioRegistryHelper.GetSfxVolume();
-            _lblSfx.Text = string.Format("SFX Volume: {0}%", _sliderSfx.Value);
-        }
-
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == Win32Api.WM_HOTKEY && m.WParam.ToInt32() == HOTKEY_ID_MOUSE)
+            if (m.Msg == Win32Api.WM_HOTKEY)
             {
-                ToggleMouseLock();
+                int hotkeyId = m.WParam.ToInt32();
+                if (hotkeyId == HOTKEY_ID_MOUSE)
+                {
+                    ToggleMouseLock();
+                }
+                else if (hotkeyId == HOTKEY_ID_TOPMOST)
+                {
+                    ToggleTopMost();
+                }
             }
             base.WndProc(ref m);
         }
@@ -444,6 +405,7 @@ namespace G3P2Launcher.UI
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             Win32Api.UnregisterHotKey(this.Handle, HOTKEY_ID_MOUSE);
+            Win32Api.UnregisterHotKey(this.Handle, HOTKEY_ID_TOPMOST);
             Win32Api.ClipCursor(IntPtr.Zero);
 
             if (_isGameRunning)
