@@ -1,0 +1,48 @@
+# ==============================================================================
+# Git Ignore for G3P2Launcher (The War of Genesis III Part 2 Launcher)
+# ==============================================================================
+
+# Build Output Directories & Artifacts
+[Bb]in/
+[Oo]bj/
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# Executables & Compiled Binaries
+*.exe
+!G3P2Launcher.exe
+
+# Allow core runtime wrapper DLL in assets
+assets/cnc-ddraw/cnc-ddraw.zip
+assets/cnc-ddraw/cnc-ddraw config.exe
+
+# Temporary Diagnostic / Debug Scripts
+debug_*.cs
+test_*.cs
+dump_*.cs
+check_*.cs
+spy.cs
+bincheck_sizes.exe
+
+# Logs & Diagnostics
+*.log
+*.tmp
+*.bak
+
+# IDE & Editor Files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.docstates
+
+# OS Specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
